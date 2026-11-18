@@ -123,7 +123,8 @@ class DataMindAgent:
                 llm = ChatGoogleGenerativeAI(
                     model=modelo_atual,
                     google_api_key=self.api_key,
-                    temperature=0.1
+                    temperature=0.1,
+                    max_retries=1
                 ).bind_tools(ferramentas)
 
                 mensagens = [
@@ -133,6 +134,8 @@ class DataMindAgent:
 
                 # Loop do agente com até 3 iterações para chamadas de ferramentas
                 texto_resposta = ""
+                houve_chamada_ferramenta = False
+
                 for _ in range(3):
                     resposta_ia = llm.invoke(mensagens)
                     mensagens.append(resposta_ia)
@@ -142,6 +145,7 @@ class DataMindAgent:
                         texto_resposta = _extrair_texto(resposta_ia.content)
                         break
 
+                    houve_chamada_ferramenta = True
                     for call in tool_calls:
                         fn_name = call["name"]
                         args = call["args"]
@@ -154,8 +158,21 @@ class DataMindAgent:
                                 name=fn_name
                             ))
 
+                # Se houve chamadas de ferramentas e o modelo ainda não sintetizou a resposta em texto
+                if houve_chamada_ferramenta and not texto_resposta.strip():
+                    llm_sintese = ChatGoogleGenerativeAI(
+                        model=modelo_atual,
+                        google_api_key=self.api_key,
+                        temperature=0.2
+                    )
+                    mensagens.append(HumanMessage(
+                        content="Com base nos dados retornados acima, apresente a resposta final executiva completa para o gestor, aplicando as regras de negócio e a formatação solicitada."
+                    ))
+                    resposta_sintese = llm_sintese.invoke(mensagens)
+                    texto_resposta = _extrair_texto(resposta_sintese.content)
+
                 if not texto_resposta.strip() and self.ultimos_dados:
-                    texto_resposta = f"Consultei os dados com sucesso. Foram retornados {len(self.ultimos_dados)} registros correspondentes à sua solicitação."
+                    texto_resposta = f"Consultei os dados com sucesso. Foram encontrados {len(self.ultimos_dados)} registros correspondentes à sua solicitação."
 
                 duracao_ms = round((time.perf_counter() - inicio) * 1000, 2)
 
