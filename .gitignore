@@ -3,10 +3,17 @@ venv/
 .venv/
 env/
 
-# Variáveis de Ambiente e Chaves de API
+# Variáveis de Ambiente e Chaves de API (Segurança Rigorosa)
 .env
-.env.local
+.env.*
+**/.env
+**/.env.*
 !.env.example
+!**/.env.example
+*.pem
+*.key
+*.cert
+*service-account*.json
 
 # Bytecode e Cache do Python
 __pycache__/
