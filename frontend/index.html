@@ -230,47 +230,43 @@
       <!-- ========================================== -->
       <section id="view-chat" class="hidden flex flex-col flex-1 min-h-0 space-y-3 pb-2">
         
-        <!-- Sugestões de Perguntas Rápidas -->
-        <div class="bg-gradient-to-r from-indigo-50/70 via-purple-50/50 to-blue-50/50 border border-indigo-100 rounded-2xl p-4 shrink-0">
-          <div class="flex items-center gap-2 mb-2 text-xs font-semibold text-indigo-950">
-            <i data-lucide="sparkles" class="w-4 h-4 text-indigo-600"></i>
-            Perguntas recomendadas para testar o agente:
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <button onclick="preencherPergunta('Quanto a empresa faturou no total em vendas concluídas?')" class="text-xs bg-white hover:bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg border border-indigo-200/80 shadow-sm transition font-medium">
-              💰 Faturamento Total
-            </button>
-            <button onclick="preencherPergunta('Quais foram os cinco produtos mais vendidos em quantidade e gere um gráfico de barras?')" class="text-xs bg-white hover:bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg border border-indigo-200/80 shadow-sm transition font-medium">
-              📊 Top 5 Produtos + Gráfico
-            </button>
-            <button onclick="preencherPergunta('Quais clientes estão com pagamentos atrasados e qual o valor total da inadimplência?')" class="text-xs bg-white hover:bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg border border-indigo-200/80 shadow-sm transition font-medium">
-              ⚠️ Inadimplência Real
-            </button>
-            <button onclick="preencherPergunta('Qual vendedor teve o melhor desempenho em faturamento?')" class="text-xs bg-white hover:bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg border border-indigo-200/80 shadow-sm transition font-medium">
-              🏆 Melhor Vendedor
-            </button>
-            <button onclick="preencherPergunta('Qual o ticket médio das vendas concluídas?')" class="text-xs bg-white hover:bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg border border-indigo-200/80 shadow-sm transition font-medium">
-              🎯 Ticket Médio
-            </button>
-          </div>
-        </div>
-
         <!-- Área de Conversação -->
         <div id="chat-messages" class="flex-1 bg-white border border-slate-200 rounded-2xl p-6 overflow-y-auto scrollbar-thin space-y-6">
           
-          <!-- Mensagem Inicial de Boas-vindas -->
+          <!-- Mensagem Inicial de Boas-vindas com Sugestões Embutidas -->
           <div class="flex gap-4 max-w-3xl">
             <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shrink-0 shadow-md">
               <i data-lucide="bot" class="w-5 h-5"></i>
             </div>
-            <div class="space-y-1">
+            <div class="space-y-1 w-full">
               <div class="flex items-center gap-2">
                 <span class="font-bold text-slate-800 text-sm">DataMind AI</span>
                 <span class="text-[11px] text-slate-400">Analista Oficial</span>
               </div>
-              <div class="bg-slate-50 border border-slate-200/80 rounded-2xl rounded-tl-sm p-4 text-sm text-slate-700 leading-relaxed shadow-sm">
-                Olá! Sou seu analista de inteligência empresarial. Estou conectado à base em tempo real através de consultas SQL seguras e controladas.<br><br>
-                Você pode me fazer qualquer pergunta sobre faturamento, vendas, clientes, contas atrasadas ou desempenho dos vendedores.
+              <div class="bg-slate-50 border border-slate-200/80 rounded-2xl rounded-tl-sm p-5 text-sm text-slate-700 leading-relaxed shadow-sm">
+                Olá! Sou seu analista de inteligência empresarial. Estou conectado à base em tempo real através de consultas SQL controladas.<br><br>
+                Você pode me fazer perguntas sobre faturamento, vendas, clientes, inadimplência e desempenho comercial.
+                
+                <div class="mt-4 pt-3 border-t border-slate-200">
+                  <span class="text-xs font-semibold text-slate-500 block mb-2">Exemplos de perguntas para começar:</span>
+                  <div class="flex flex-wrap gap-2">
+                    <button onclick="preencherPergunta('Quanto a empresa faturou no total em vendas concluídas?')" class="text-xs bg-white hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition font-medium">
+                      💰 Faturamento Total
+                    </button>
+                    <button onclick="preencherPergunta('Quais foram os cinco produtos mais vendidos em quantidade e gere um gráfico de barras?')" class="text-xs bg-white hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition font-medium">
+                      📊 Top 5 Produtos + Gráfico
+                    </button>
+                    <button onclick="preencherPergunta('Quais clientes estão com pagamentos atrasados e qual o valor total da inadimplência?')" class="text-xs bg-white hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition font-medium">
+                      ⚠️ Inadimplência Real
+                    </button>
+                    <button onclick="preencherPergunta('Qual vendedor teve o melhor desempenho em faturamento?')" class="text-xs bg-white hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition font-medium">
+                      🏆 Melhor Vendedor
+                    </button>
+                    <button onclick="preencherPergunta('Qual o ticket médio das vendas concluídas?')" class="text-xs bg-white hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition font-medium">
+                      🎯 Ticket Médio
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
