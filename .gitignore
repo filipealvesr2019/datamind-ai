@@ -1,0 +1,30 @@
+# Ambientes Virtuais
+venv/
+.venv/
+env/
+
+# Variáveis de Ambiente e Chaves de API
+.env
+.env.local
+!.env.example
+
+# Bytecode e Cache do Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Bancos de Dados SQLite
+*.db
+*.sqlite3
+
+# Arquivos de Exportação e Logs
+exports/*.xlsx
+exports/*.pdf
+*.log
+
+# IDEs e OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
