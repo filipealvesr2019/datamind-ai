@@ -197,7 +197,7 @@ async function enviarPergunta() {
       if (data.grafico) {
         chartBlockHtml = `
           <div class="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
-            <div id="${chartContainerId}" style="width: 100%; height: 260px;"></div>
+            <div id="${chartContainerId}" style="width: 100%; height: 320px;"></div>
           </div>
         `;
       }

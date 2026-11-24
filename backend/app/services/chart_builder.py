@@ -47,12 +47,14 @@ def construir_especificacao_grafico(
     layout_base = {
         "title": {
             "text": titulo,
+            "x": 0.5,
+            "xanchor": "center",
             "font": {"family": "Inter, system-ui, sans-serif", "size": 14, "color": "#1e293b"}
         },
-        "height": 260,
+        "height": 320,
         "paper_bgcolor": "rgba(0,0,0,0)",
         "plot_bgcolor": "rgba(0,0,0,0)",
-        "margin": {"l": 45, "r": 15, "t": 35, "b": 75},
+        "margin": {"l": 50, "r": 20, "t": 50, "b": 75},
         "autosize": True,
         "font": {"family": "Inter, system-ui, sans-serif", "color": "#64748b", "size": 11}
     }
@@ -68,8 +70,8 @@ def construir_especificacao_grafico(
                 "line": {"color": "#1d4ed8", "width": 1}
             }
         }]
-        layout_base["xaxis"] = {"gridcolor": "#f1f5f9", "tickangle": -25}
-        layout_base["yaxis"] = {"gridcolor": "#e2e8f0"}
+        layout_base["xaxis"] = {"gridcolor": "#f1f5f9", "tickangle": -25, "automargin": True}
+        layout_base["yaxis"] = {"gridcolor": "#e2e8f0", "automargin": True}
 
     elif tipo_normalizado == "line":
         traces = [{
@@ -81,20 +83,56 @@ def construir_especificacao_grafico(
             "line": {"color": PALETA_CORES[1], "width": 3, "shape": "spline"},
             "marker": {"size": 7, "color": PALETA_CORES[1]}
         }]
-        layout_base["xaxis"] = {"gridcolor": "#f1f5f9"}
-        layout_base["yaxis"] = {"gridcolor": "#e2e8f0"}
+        layout_base["xaxis"] = {"gridcolor": "#f1f5f9", "automargin": True}
+        layout_base["yaxis"] = {"gridcolor": "#e2e8f0", "automargin": True}
 
     elif tipo_normalizado in ("pie", "donut"):
-        hole_size = 0.55 if tipo_normalizado == "donut" else 0.0
+        # Agrupa automaticamente em "Top 5 + Outros" quando há muitas fatias para evitar poluição visual
+        pares = []
+        for lx, vy in zip(valores_x, valores_y):
+            try:
+                num = float(vy) if vy is not None else 0.0
+            except (TypeError, ValueError):
+                num = 0.0
+            if num > 0:
+                pares.append((str(lx), num))
+
+        pares.sort(key=lambda item: item[1], reverse=True)
+        if len(pares) > 6:
+            top_5 = pares[:5]
+            restante = pares[5:]
+            soma_outros = round(sum(v for _, v in restante), 2)
+            pares = top_5 + [(f"Outros ({len(restante)} itens)", soma_outros)]
+
+        labels_limpos = [p[0] for p in pares]
+        valores_limpos = [p[1] for p in pares]
+        cores = [PALETA_CORES[i % len(PALETA_CORES)] for i in range(len(labels_limpos))]
+
+        hole_size = 0.52 if tipo_normalizado == "donut" else 0.0
         traces = [{
             "type": "pie",
-            "labels": valores_x,
-            "values": valores_y,
+            "labels": labels_limpos,
+            "values": valores_limpos,
             "hole": hole_size,
-            "marker": {"colors": PALETA_CORES[:len(valores_x)]},
-            "textinfo": "label+percent",
-            "insidetextorientation": "radial"
+            "sort": False,
+            "marker": {
+                "colors": cores,
+                "line": {"color": "#ffffff", "width": 2}
+            },
+            "textinfo": "percent",
+            "textposition": "inside",
+            "insidetextorientation": "horizontal",
+            "textfont": {"size": 12, "color": "#ffffff"},
+            "hovertemplate": "<b>%{label}</b><br>Valor: %{value:,.2f}<br>Participação: %{percent}<extra></extra>"
         }]
+        layout_base["margin"] = {"l": 20, "r": 20, "t": 52, "b": 20}
+        layout_base["legend"] = {
+            "orientation": "v",
+            "x": 1.02,
+            "y": 0.5,
+            "yanchor": "middle",
+            "font": {"size": 11, "color": "#334155"}
+        }
 
     else:
         # Fallback para gráfico de barras
