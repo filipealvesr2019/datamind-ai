@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -14,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from db.database import get_read_only_connection
 from agent.engine import DataMindAgent
+from services.pdf_exporter import gerar_relatorio_pdf
 
 app = FastAPI(
     title="DataMind AI — Analista Empresarial Inteligente",
@@ -45,6 +47,13 @@ class MensagemHistorico(BaseModel):
 class PerguntaRequest(BaseModel):
     pergunta: str
     historico: Optional[List[MensagemHistorico]] = None
+
+
+class ExportarPDFRequest(BaseModel):
+    pergunta: str = ""
+    resposta: str
+    dados_tabela: Optional[List[Dict[str, Any]]] = None
+    grafico_imagem_base64: Optional[str] = None
 
 
 # ==========================================
@@ -147,6 +156,25 @@ def conversar_com_dados(req: PerguntaRequest):
     historico_dicts = [m.model_dump() for m in req.historico] if req.historico else None
     resultado = agent.responder(req.pergunta, historico=historico_dicts)
     return resultado
+
+
+@app.post("/api/export/pdf")
+def exportar_relatorio_pdf(req: ExportarPDFRequest):
+    """Gera e retorna um relatório executivo em PDF com texto, gráfico e tabela de dados."""
+    if not req.resposta.strip():
+        raise HTTPException(status_code=400, detail="O conteúdo do relatório não pode ser vazio.")
+
+    pdf_bytes = gerar_relatorio_pdf(
+        pergunta=req.pergunta,
+        resposta=req.resposta,
+        dados_tabela=req.dados_tabela,
+        grafico_imagem_base64=req.grafico_imagem_base64
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="relatorio-datamind.pdf"'}
+    )
 
 
 # ==========================================

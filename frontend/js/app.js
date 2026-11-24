@@ -124,6 +124,7 @@ async function carregarDashboard() {
 // TELA 2: ANALISTA IA (CHAT)
 // ==========================================
 const chatHistory = [];
+const reportStore = new Map();
 
 function preencherPergunta(texto) {
   const input = document.getElementById('input-pergunta');
@@ -190,8 +191,17 @@ async function enviarPergunta() {
       chatHistory.push({ role: 'user', content: pergunta });
       chatHistory.push({ role: 'assistant', content: data.resposta || '' });
 
-      const chartContainerId = 'chart-msg-' + Date.now();
+      const msgId = 'msg-' + Date.now();
+      const chartContainerId = 'chart-' + msgId;
       const respostaFormatada = marked.parse(data.resposta || '');
+
+      reportStore.set(msgId, {
+        pergunta,
+        resposta: data.resposta || '',
+        dados_tabela: data.dados_tabela || [],
+        grafico: data.grafico || null,
+        chartContainerId
+      });
 
       let chartBlockHtml = '';
       if (data.grafico) {
@@ -202,8 +212,35 @@ async function enviarPergunta() {
         `;
       }
 
+      let exportBarHtml = '';
+      const ehRespostaAnalitica = data.intencao !== 'esclarecimento' && data.intencao !== 'conversa_geral';
+      if (ehRespostaAnalitica) {
+        const temTabela = Array.isArray(data.dados_tabela) && data.dados_tabela.length > 0;
+        const temGrafico = Boolean(data.grafico);
+        exportBarHtml = `
+          <div class="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2 not-prose">
+            <button onclick="exportarPDF('${msgId}', this)" class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200/80 transition">
+              <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+              <span>Exportar PDF</span>
+            </button>
+            ${temTabela ? `
+              <button onclick="exportarCSV('${msgId}')" class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/80 transition">
+                <i data-lucide="table" class="w-3.5 h-3.5"></i>
+                <span>Exportar CSV</span>
+              </button>
+            ` : ''}
+            ${temGrafico ? `
+              <button onclick="exportarPNG('${msgId}')" class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition">
+                <i data-lucide="image" class="w-3.5 h-3.5"></i>
+                <span>Baixar PNG</span>
+              </button>
+            ` : ''}
+          </div>
+        `;
+      }
+
       const botMsgHtml = `
-        <div id="msg-${data.tempo_ms}" class="flex gap-4 max-w-3xl w-full">
+        <div id="${msgId}" class="flex gap-4 max-w-3xl w-full">
           <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shrink-0 shadow-md">
             <i data-lucide="bot" class="w-5 h-5"></i>
           </div>
@@ -215,6 +252,7 @@ async function enviarPergunta() {
             <div class="bg-white border border-slate-200/90 rounded-2xl rounded-tl-sm p-5 text-sm text-slate-800 shadow-sm leading-relaxed prose max-w-none">
               <div>${respostaFormatada}</div>
               ${chartBlockHtml}
+              ${exportBarHtml}
             </div>
           </div>
         </div>
@@ -270,6 +308,111 @@ async function enviarPergunta() {
 document.getElementById('input-pergunta')?.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') enviarPergunta();
 });
+
+// ==========================================
+// EXPORTAÇÃO DE RELATÓRIOS (PDF, CSV, PNG)
+// ==========================================
+function _baixarBlob(blob, nomeArquivo) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nomeArquivo;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function exportarPDF(msgId, btnEl) {
+  const item = reportStore.get(msgId);
+  if (!item) return;
+
+  const textoOriginal = btnEl ? btnEl.innerHTML : '';
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.innerHTML = '<span>Gerando PDF...</span>';
+  }
+
+  try {
+    let graficoBase64 = null;
+    if (item.grafico) {
+      const chartEl = document.getElementById(item.chartContainerId);
+      if (chartEl && typeof Plotly !== 'undefined') {
+        graficoBase64 = await Plotly.toImage(chartEl, {
+          format: 'png',
+          width: 960,
+          height: 480,
+          scale: 2
+        });
+      }
+    }
+
+    const res = await fetch('/api/export/pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pergunta: item.pergunta,
+        resposta: item.resposta,
+        dados_tabela: item.dados_tabela,
+        grafico_imagem_base64: graficoBase64
+      })
+    });
+
+    if (!res.ok) throw new Error('Falha ao gerar o PDF no servidor.');
+
+    const pdfBlob = await res.blob();
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+    _baixarBlob(pdfBlob, `relatorio-datamind-${stamp}.pdf`);
+  } catch (err) {
+    console.error('Erro ao exportar PDF:', err);
+    alert('Não foi possível exportar o PDF: ' + err.message);
+  } finally {
+    if (btnEl) {
+      btnEl.disabled = false;
+      btnEl.innerHTML = textoOriginal;
+      lucide.createIcons();
+    }
+  }
+}
+
+function exportarCSV(msgId) {
+  const item = reportStore.get(msgId);
+  if (!item || !item.dados_tabela || item.dados_tabela.length === 0) return;
+
+  const colunas = Object.keys(item.dados_tabela[0]);
+  const escaparCelula = (val) => {
+    const texto = val === null || val === undefined ? '' : String(val);
+    return `"${texto.replace(/"/g, '""')}"`;
+  };
+
+  const linhas = [
+    colunas.map(escaparCelula).join(';'),
+    ...item.dados_tabela.map(row => colunas.map(col => escaparCelula(row[col])).join(';'))
+  ];
+
+  // BOM UTF-8 para abrir com acentos corretos no Excel em português
+  const csvConteudo = '\uFEFF' + linhas.join('\r\n');
+  const blob = new Blob([csvConteudo], { type: 'text/csv;charset=utf-8;' });
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+  _baixarBlob(blob, `datamind-dados-${stamp}.csv`);
+}
+
+async function exportarPNG(msgId) {
+  const item = reportStore.get(msgId);
+  if (!item || !item.grafico) return;
+
+  const chartEl = document.getElementById(item.chartContainerId);
+  if (!chartEl || typeof Plotly === 'undefined') return;
+
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+  await Plotly.downloadImage(chartEl, {
+    format: 'png',
+    width: 1000,
+    height: 550,
+    scale: 2,
+    filename: `datamind-grafico-${stamp}`
+  });
+}
 
 // ==========================================
 // TELA 3: AUDITORIA

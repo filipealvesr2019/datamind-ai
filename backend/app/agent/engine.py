@@ -235,7 +235,7 @@ class DataMindAgent:
                     "intencao": decisao.intencao,
                     "resposta": texto_resposta,
                     "sql_executado": self.ultimo_sql,
-                    "dados_tabela": self.ultimos_dados[:20],
+                    "dados_tabela": self.ultimos_dados[:100],
                     "total_registros": len(self.ultimos_dados),
                     "grafico": self.ultimo_grafico,
                     "tempo_ms": duracao_ms,
