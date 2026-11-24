@@ -123,6 +123,8 @@ async function carregarDashboard() {
 // ==========================================
 // TELA 2: ANALISTA IA (CHAT)
 // ==========================================
+const chatHistory = [];
+
 function preencherPergunta(texto) {
   const input = document.getElementById('input-pergunta');
   input.value = texto;
@@ -175,13 +177,19 @@ async function enviarPergunta() {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pergunta })
+      body: JSON.stringify({
+        pergunta,
+        historico: chatHistory.slice(-10)
+      })
     });
 
     const data = await res.json();
     document.getElementById(loadingId)?.remove();
 
     if (data.sucesso) {
+      chatHistory.push({ role: 'user', content: pergunta });
+      chatHistory.push({ role: 'assistant', content: data.resposta || '' });
+
       const chartContainerId = 'chart-msg-' + Date.now();
       const respostaFormatada = marked.parse(data.resposta || '');
 

@@ -37,8 +37,14 @@ agent = DataMindAgent()
 FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend"
 
 
+class MensagemHistorico(BaseModel):
+    role: str
+    content: str
+
+
 class PerguntaRequest(BaseModel):
     pergunta: str
+    historico: Optional[List[MensagemHistorico]] = None
 
 
 # ==========================================
@@ -138,7 +144,8 @@ def conversar_com_dados(req: PerguntaRequest):
     if not req.pergunta.strip():
         raise HTTPException(status_code=400, detail="A pergunta não pode ser vazia.")
 
-    resultado = agent.responder(req.pergunta)
+    historico_dicts = [m.model_dump() for m in req.historico] if req.historico else None
+    resultado = agent.responder(req.pergunta, historico=historico_dicts)
     return resultado
 
 

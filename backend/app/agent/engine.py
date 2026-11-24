@@ -15,7 +15,7 @@ ENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"
 load_dotenv(dotenv_path=ENV_PATH)
 
 from langchain_core.tools import tool
-from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 try:
@@ -97,7 +97,7 @@ class DataMindAgent:
 
         return [consultar_banco, gerar_grafico]
 
-    def responder(self, pergunta: str) -> Dict[str, Any]:
+    def responder(self, pergunta: str, historico: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
         """Processa a pergunta do gestor e retorna resposta executiva, SQL e gráfico."""
         if not self.api_key:
             return {
@@ -127,16 +127,24 @@ class DataMindAgent:
                     max_retries=1
                 ).bind_tools(ferramentas)
 
-                mensagens = [
-                    SystemMessage(content=SYSTEM_PROMPT),
-                    HumanMessage(content=pergunta)
-                ]
+                mensagens: List[Any] = [SystemMessage(content=SYSTEM_PROMPT)]
+                if historico:
+                    for msg in historico[-10:]:
+                        role = msg.get("role", "")
+                        content = (msg.get("content") or "").strip()
+                        if not content:
+                            continue
+                        if role == "user":
+                            mensagens.append(HumanMessage(content=content))
+                        elif role == "assistant":
+                            mensagens.append(AIMessage(content=content))
+                mensagens.append(HumanMessage(content=pergunta))
 
-                # Loop do agente com até 3 iterações para chamadas de ferramentas
+                # Loop do agente com até 5 iterações para chamadas de ferramentas
                 texto_resposta = ""
                 houve_chamada_ferramenta = False
 
-                for _ in range(3):
+                for _ in range(5):
                     resposta_ia = llm.invoke(mensagens)
                     mensagens.append(resposta_ia)
 
