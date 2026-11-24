@@ -185,24 +185,6 @@ async function enviarPergunta() {
       const chartContainerId = 'chart-msg-' + Date.now();
       const respostaFormatada = marked.parse(data.resposta || '');
 
-      let sqlAccordionHtml = '';
-      if (data.sql_executado) {
-        sqlAccordionHtml = `
-          <details class="mt-3 bg-slate-100 rounded-xl border border-slate-200 text-xs overflow-hidden">
-            <summary class="px-3 py-2 cursor-pointer font-semibold text-slate-700 flex items-center justify-between select-none hover:bg-slate-200/60 transition">
-              <span class="flex items-center gap-1.5 text-indigo-700">
-                <i data-lucide="code" class="w-3.5 h-3.5"></i>
-                Consulta SQL Executada
-              </span>
-              <span class="text-[10px] bg-white px-2 py-0.5 rounded text-slate-500 font-mono">${data.tempo_ms} ms</span>
-            </summary>
-            <div class="p-3 bg-slate-900 text-slate-200 font-mono text-[11px] overflow-x-auto">
-              ${data.sql_executado}
-            </div>
-          </details>
-        `;
-      }
-
       let chartBlockHtml = '';
       if (data.grafico) {
         chartBlockHtml = `
@@ -225,7 +207,6 @@ async function enviarPergunta() {
             <div class="bg-white border border-slate-200/90 rounded-2xl rounded-tl-sm p-5 text-sm text-slate-800 shadow-sm leading-relaxed prose max-w-none">
               <div>${respostaFormatada}</div>
               ${chartBlockHtml}
-              ${sqlAccordionHtml}
             </div>
           </div>
         </div>
