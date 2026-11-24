@@ -52,8 +52,8 @@ def construir_especificacao_grafico(
             "font": {"family": "Inter, system-ui, sans-serif", "size": 14, "color": "#1e293b"}
         },
         "height": 320,
-        "paper_bgcolor": "rgba(0,0,0,0)",
-        "plot_bgcolor": "rgba(0,0,0,0)",
+        "paper_bgcolor": "#ffffff",
+        "plot_bgcolor": "#ffffff",
         "margin": {"l": 50, "r": 20, "t": 50, "b": 75},
         "autosize": True,
         "font": {"family": "Inter, system-ui, sans-serif", "color": "#64748b", "size": 11}

@@ -113,7 +113,12 @@ class DataMindAgent:
 
         # Modelos para tentar em cascata caso o primeiro falhe por cota (429) ou sobrecarga (503)
         modelos_candidatos = [self.model_name]
-        for fallback in ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"]:
+        for fallback in [
+            "gemini-2.5-flash-lite",
+            "gemini-3.1-flash-lite",
+            "gemini-3.5-flash-lite",
+            "gemini-3.8-flash",
+        ]:
             if fallback not in modelos_candidatos:
                 modelos_candidatos.append(fallback)
 

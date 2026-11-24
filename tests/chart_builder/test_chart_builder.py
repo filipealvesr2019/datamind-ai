@@ -1,4 +1,4 @@
-﻿"""Testes automatizados do construtor determinÃ­stico de grÃ¡ficos Plotly."""
+"""Testes automatizados do construtor determinÃ­stico de grÃ¡ficos Plotly."""
 
 import sys
 import unittest
@@ -22,6 +22,8 @@ class TestChartBuilder(unittest.TestCase):
         self.assertEqual(spec["data"][0]["type"], "bar")
         self.assertEqual(spec["data"][0]["x"], ["Produto A", "Produto B"])
         self.assertEqual(spec["data"][0]["y"], [50, 30])
+        self.assertEqual(spec["layout"]["paper_bgcolor"], "#ffffff")
+        self.assertEqual(spec["layout"]["plot_bgcolor"], "#ffffff")
 
     def test_grafico_linha(self):
         dados = [{"dia": "2026-11-01", "total": 1000}, {"dia": "2026-11-02", "total": 2500}]
