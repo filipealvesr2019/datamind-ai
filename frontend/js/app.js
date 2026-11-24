@@ -28,6 +28,8 @@ function navegarPara(tela) {
   const titleEl = document.getElementById('page-title');
   const subEl = document.getElementById('page-subtitle');
 
+  localStorage.setItem('datamind_active_view', tela);
+
   if (tela === 'dashboard') {
     titleEl.innerText = "Dashboard Executivo";
     subEl.innerText = "Acompanhe métricas em tempo real e converse com os dados.";
@@ -35,6 +37,7 @@ function navegarPara(tela) {
   } else if (tela === 'chat') {
     titleEl.innerText = "Analista de IA Corporativo";
     subEl.innerText = "Faça perguntas em linguagem natural diretamente para a base de dados.";
+    inicializarAreaChat();
   } else if (tela === 'audit') {
     titleEl.innerText = "Auditoria & Logs de Segurança";
     subEl.innerText = "Rastreabilidade e governança de todas as consultas geradas pela IA.";
@@ -121,10 +124,280 @@ async function carregarDashboard() {
 }
 
 // ==========================================
-// TELA 2: ANALISTA IA (CHAT)
+// TELA 2: ANALISTA IA (CHAT + HISTÓRICO)
 // ==========================================
-const chatHistory = [];
+let chatHistory = [];
+let conversaAtivaId = null;
+let chatInicializado = false;
 const reportStore = new Map();
+
+function _escaparHtml(texto) {
+  return String(texto || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function _obterHtmlBoasVindas() {
+  return `
+    <div class="flex gap-4 max-w-3xl">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shrink-0 shadow-md">
+        <i data-lucide="bot" class="w-5 h-5"></i>
+      </div>
+      <div class="space-y-1 w-full">
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-slate-800 text-sm">DataMind AI</span>
+          <span class="text-[11px] text-slate-400">Analista Oficial</span>
+        </div>
+        <div class="bg-slate-50 border border-slate-200/80 rounded-2xl rounded-tl-sm p-5 text-sm text-slate-700 leading-relaxed shadow-sm">
+          Olá! Sou seu analista de inteligência empresarial. Estou conectado à base em tempo real através de consultas SQL controladas.<br><br>
+          Você pode me fazer perguntas sobre faturamento, vendas, clientes, inadimplência e desempenho comercial.
+
+          <div class="mt-4 pt-3 border-t border-slate-200">
+            <span class="text-xs font-semibold text-slate-500 block mb-2">Exemplos de perguntas para começar:</span>
+            <div class="flex flex-wrap gap-2">
+              <button onclick="preencherPergunta('Quanto a empresa faturou no total em vendas concluídas?')" class="text-xs bg-white hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition font-medium">
+                💰 Faturamento Total
+              </button>
+              <button onclick="preencherPergunta('Quais foram os cinco produtos mais vendidos em quantidade e gere um gráfico de barras?')" class="text-xs bg-white hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition font-medium">
+                📊 Top 5 Produtos + Gráfico
+              </button>
+              <button onclick="preencherPergunta('Quais clientes estão com pagamentos atrasados e qual o valor total da inadimplência?')" class="text-xs bg-white hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition font-medium">
+                ⚠️ Inadimplência Real
+              </button>
+              <button onclick="preencherPergunta('Qual vendedor teve o melhor desempenho em faturamento?')" class="text-xs bg-white hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition font-medium">
+                🏆 Melhor Vendedor
+              </button>
+              <button onclick="preencherPergunta('Qual o ticket médio das vendas concluídas?')" class="text-xs bg-white hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm transition font-medium">
+                🎯 Ticket Médio
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function _renderizarMensagemUsuario(texto) {
+  const chatContainer = document.getElementById('chat-messages');
+  const userMsgHtml = `
+    <div class="flex gap-4 justify-end max-w-3xl ml-auto">
+      <div class="bg-indigo-600 text-white rounded-2xl rounded-tr-sm p-4 text-sm shadow-md">
+        ${_escaparHtml(texto)}
+      </div>
+      <div class="w-10 h-10 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center shrink-0">
+        <i data-lucide="user" class="w-5 h-5"></i>
+      </div>
+    </div>
+  `;
+  chatContainer.insertAdjacentHTML('beforeend', userMsgHtml);
+}
+
+function _renderizarMensagemAssistente({ pergunta, resposta, dados_tabela, grafico, intencao }) {
+  const chatContainer = document.getElementById('chat-messages');
+  const msgId = 'msg-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
+  const chartContainerId = 'chart-' + msgId;
+  const respostaFormatada = marked.parse(resposta || '');
+
+  reportStore.set(msgId, {
+    pergunta: pergunta || '',
+    resposta: resposta || '',
+    dados_tabela: dados_tabela || [],
+    grafico: grafico || null,
+    chartContainerId
+  });
+
+  let chartBlockHtml = '';
+  if (grafico) {
+    chartBlockHtml = `
+      <div class="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+        <div id="${chartContainerId}" style="width: 100%; height: 320px;"></div>
+      </div>
+    `;
+  }
+
+  let exportBarHtml = '';
+  const ehRespostaAnalitica = intencao !== 'esclarecimento' && intencao !== 'conversa_geral';
+  if (ehRespostaAnalitica) {
+    const temTabela = Array.isArray(dados_tabela) && dados_tabela.length > 0;
+    const temGrafico = Boolean(grafico);
+    exportBarHtml = `
+      <div class="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2 not-prose">
+        <button onclick="exportarPDF('${msgId}', this)" class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200/80 transition">
+          <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+          <span>Exportar PDF</span>
+        </button>
+        ${temTabela ? `
+          <button onclick="exportarCSV('${msgId}')" class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/80 transition">
+            <i data-lucide="table" class="w-3.5 h-3.5"></i>
+            <span>Exportar CSV</span>
+          </button>
+        ` : ''}
+        ${temGrafico ? `
+          <button onclick="exportarPNG('${msgId}')" class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition">
+            <i data-lucide="image" class="w-3.5 h-3.5"></i>
+            <span>Baixar PNG</span>
+          </button>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  const botMsgHtml = `
+    <div id="${msgId}" class="flex gap-4 max-w-3xl w-full">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shrink-0 shadow-md">
+        <i data-lucide="bot" class="w-5 h-5"></i>
+      </div>
+      <div class="space-y-1.5 w-full min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-slate-800 text-sm">DataMind AI</span>
+          <span class="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-semibold border border-indigo-200">Analista Oficial</span>
+        </div>
+        <div class="bg-white border border-slate-200/90 rounded-2xl rounded-tl-sm p-5 text-sm text-slate-800 shadow-sm leading-relaxed prose max-w-none">
+          <div>${respostaFormatada}</div>
+          ${chartBlockHtml}
+          ${exportBarHtml}
+        </div>
+      </div>
+    </div>
+  `;
+
+  chatContainer.insertAdjacentHTML('beforeend', botMsgHtml);
+
+  if (grafico) {
+    Plotly.newPlot(chartContainerId, grafico.data, grafico.layout, grafico.config);
+  }
+}
+
+async function carregarListaConversas() {
+  const listEl = document.getElementById('chat-history-list');
+  if (!listEl) return [];
+
+  try {
+    const res = await fetch('/api/conversas');
+    if (!res.ok) throw new Error('Falha ao listar conversas');
+    const conversas = await res.json();
+
+    if (conversas.length === 0) {
+      listEl.innerHTML = `<p class="text-xs text-slate-400 text-center py-6 px-3">Nenhuma conversa salva ainda. Envie sua primeira pergunta!</p>`;
+      return [];
+    }
+
+    listEl.innerHTML = conversas.map(c => {
+      const ativa = c.id === conversaAtivaId;
+      const classeCard = ativa
+        ? 'bg-indigo-50 border-indigo-200 text-indigo-900'
+        : 'bg-transparent border-transparent text-slate-700 hover:bg-slate-50';
+      const dataCurta = (c.atualizada_em || '').slice(0, 16).replace('T', ' ');
+      return `
+        <div onclick="selecionarConversa(${c.id})" class="group flex items-start justify-between gap-2 p-2.5 rounded-xl border cursor-pointer transition ${classeCard}">
+          <div class="min-w-0 flex-1">
+            <p class="text-xs font-semibold truncate">${_escaparHtml(c.titulo)}</p>
+            <p class="text-[10px] text-slate-400 mt-0.5">${dataCurta}</p>
+          </div>
+          <button onclick="excluirConversaUI(event, ${c.id})" title="Excluir conversa" class="opacity-0 group-hover:opacity-100 p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition shrink-0">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+      `;
+    }).join('');
+
+    lucide.createIcons();
+    return conversas;
+  } catch (err) {
+    listEl.innerHTML = `<p class="text-xs text-rose-500 text-center py-4">Erro ao carregar histórico.</p>`;
+    return [];
+  }
+}
+
+async function selecionarConversa(conversaId) {
+  const chatContainer = document.getElementById('chat-messages');
+  try {
+    const res = await fetch(`/api/conversas/${conversaId}`);
+    if (!res.ok) {
+      iniciarNovaConversa();
+      return;
+    }
+    const conversa = await res.json();
+    conversaAtivaId = conversa.id;
+    localStorage.setItem('datamind_active_conversa_id', String(conversa.id));
+
+    chatHistory = [];
+    reportStore.clear();
+    chatContainer.innerHTML = _obterHtmlBoasVindas();
+
+    let ultimaPergunta = '';
+    for (const m of conversa.mensagens || []) {
+      chatHistory.push({ role: m.role, content: m.conteudo });
+      if (m.role === 'user') {
+        ultimaPergunta = m.conteudo;
+        _renderizarMensagemUsuario(m.conteudo);
+      } else {
+        _renderizarMensagemAssistente({
+          pergunta: ultimaPergunta,
+          resposta: m.conteudo,
+          dados_tabela: m.dados_tabela,
+          grafico: m.grafico,
+          intencao: m.intencao
+        });
+      }
+    }
+
+    lucide.createIcons();
+    await carregarListaConversas();
+    setTimeout(() => {
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }, 120);
+  } catch (err) {
+    console.error('Erro ao abrir conversa:', err);
+  }
+}
+
+function iniciarNovaConversa() {
+  conversaAtivaId = null;
+  localStorage.removeItem('datamind_active_conversa_id');
+  chatHistory = [];
+  reportStore.clear();
+  const chatContainer = document.getElementById('chat-messages');
+  if (chatContainer) {
+    chatContainer.innerHTML = _obterHtmlBoasVindas();
+  }
+  lucide.createIcons();
+  carregarListaConversas();
+  document.getElementById('input-pergunta')?.focus();
+}
+
+async function excluirConversaUI(event, conversaId) {
+  event.stopPropagation();
+  try {
+    const res = await fetch(`/api/conversas/${conversaId}`, { method: 'DELETE' });
+    if (!res.ok) return;
+    if (conversaAtivaId === conversaId) {
+      iniciarNovaConversa();
+    } else {
+      await carregarListaConversas();
+    }
+  } catch (err) {
+    console.error('Erro ao excluir conversa:', err);
+  }
+}
+
+async function inicializarAreaChat() {
+  const conversas = await carregarListaConversas();
+  if (chatInicializado) return;
+  chatInicializado = true;
+
+  const salvaId = parseInt(localStorage.getItem('datamind_active_conversa_id') || '', 10);
+  if (salvaId && conversas.some(c => c.id === salvaId)) {
+    await selecionarConversa(salvaId);
+  } else if (conversas.length > 0) {
+    await selecionarConversa(conversas[0].id);
+  } else {
+    iniciarNovaConversa();
+  }
+}
 
 function preencherPergunta(texto) {
   const input = document.getElementById('input-pergunta');
@@ -140,17 +413,7 @@ async function enviarPergunta() {
   const chatContainer = document.getElementById('chat-messages');
 
   // 1. Mensagem do Usuário
-  const userMsgHtml = `
-    <div class="flex gap-4 justify-end max-w-3xl ml-auto">
-      <div class="bg-indigo-600 text-white rounded-2xl rounded-tr-sm p-4 text-sm shadow-md">
-        ${pergunta}
-      </div>
-      <div class="w-10 h-10 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center shrink-0">
-        <i data-lucide="user" class="w-5 h-5"></i>
-      </div>
-    </div>
-  `;
-  chatContainer.insertAdjacentHTML('beforeend', userMsgHtml);
+  _renderizarMensagemUsuario(pergunta);
   input.value = '';
   lucide.createIcons();
 
@@ -180,6 +443,7 @@ async function enviarPergunta() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         pergunta,
+        conversa_id: conversaAtivaId,
         historico: chatHistory.slice(-10)
       })
     });
@@ -188,82 +452,23 @@ async function enviarPergunta() {
     document.getElementById(loadingId)?.remove();
 
     if (data.sucesso) {
+      if (data.conversa_id) {
+        conversaAtivaId = data.conversa_id;
+        localStorage.setItem('datamind_active_conversa_id', String(conversaAtivaId));
+      }
+
       chatHistory.push({ role: 'user', content: pergunta });
       chatHistory.push({ role: 'assistant', content: data.resposta || '' });
 
-      const msgId = 'msg-' + Date.now();
-      const chartContainerId = 'chart-' + msgId;
-      const respostaFormatada = marked.parse(data.resposta || '');
-
-      reportStore.set(msgId, {
+      _renderizarMensagemAssistente({
         pergunta,
         resposta: data.resposta || '',
         dados_tabela: data.dados_tabela || [],
         grafico: data.grafico || null,
-        chartContainerId
+        intencao: data.intencao
       });
 
-      let chartBlockHtml = '';
-      if (data.grafico) {
-        chartBlockHtml = `
-          <div class="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
-            <div id="${chartContainerId}" style="width: 100%; height: 320px;"></div>
-          </div>
-        `;
-      }
-
-      let exportBarHtml = '';
-      const ehRespostaAnalitica = data.intencao !== 'esclarecimento' && data.intencao !== 'conversa_geral';
-      if (ehRespostaAnalitica) {
-        const temTabela = Array.isArray(data.dados_tabela) && data.dados_tabela.length > 0;
-        const temGrafico = Boolean(data.grafico);
-        exportBarHtml = `
-          <div class="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2 not-prose">
-            <button onclick="exportarPDF('${msgId}', this)" class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200/80 transition">
-              <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
-              <span>Exportar PDF</span>
-            </button>
-            ${temTabela ? `
-              <button onclick="exportarCSV('${msgId}')" class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/80 transition">
-                <i data-lucide="table" class="w-3.5 h-3.5"></i>
-                <span>Exportar CSV</span>
-              </button>
-            ` : ''}
-            ${temGrafico ? `
-              <button onclick="exportarPNG('${msgId}')" class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition">
-                <i data-lucide="image" class="w-3.5 h-3.5"></i>
-                <span>Baixar PNG</span>
-              </button>
-            ` : ''}
-          </div>
-        `;
-      }
-
-      const botMsgHtml = `
-        <div id="${msgId}" class="flex gap-4 max-w-3xl w-full">
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shrink-0 shadow-md">
-            <i data-lucide="bot" class="w-5 h-5"></i>
-          </div>
-          <div class="space-y-1.5 w-full min-w-0">
-            <div class="flex items-center gap-2">
-              <span class="font-bold text-slate-800 text-sm">DataMind AI</span>
-              <span class="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-semibold border border-indigo-200">Analista Oficial</span>
-            </div>
-            <div class="bg-white border border-slate-200/90 rounded-2xl rounded-tl-sm p-5 text-sm text-slate-800 shadow-sm leading-relaxed prose max-w-none">
-              <div>${respostaFormatada}</div>
-              ${chartBlockHtml}
-              ${exportBarHtml}
-            </div>
-          </div>
-        </div>
-      `;
-
-      chatContainer.insertAdjacentHTML('beforeend', botMsgHtml);
-
-      // Renderiza gráfico se existir
-      if (data.grafico) {
-        Plotly.newPlot(chartContainerId, data.grafico.data, data.grafico.layout, data.grafico.config);
-      }
+      await carregarListaConversas();
 
       setTimeout(() => {
         chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -456,8 +661,13 @@ async function carregarAuditoria() {
   }
 }
 
-// Inicialização
+// Inicialização (restaura a última aba visitada e a conversa ativa)
 document.addEventListener('DOMContentLoaded', () => {
   lucide.createIcons();
-  carregarDashboard();
+  const ultimaAba = localStorage.getItem('datamind_active_view');
+  if (ultimaAba && ['dashboard', 'chat', 'audit'].includes(ultimaAba)) {
+    navegarPara(ultimaAba);
+  } else {
+    carregarDashboard();
+  }
 });

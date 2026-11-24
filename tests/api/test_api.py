@@ -1,4 +1,4 @@
-﻿"""Testes automatizados de integraÃ§Ã£o da API FastAPI â€” DataMind AI."""
+"""Testes automatizados de integraÃ§Ã£o da API FastAPI â€” DataMind AI."""
 
 import io
 import sys
@@ -72,14 +72,36 @@ class TestDataMindAPI(unittest.TestCase):
         res = self.client.post("/api/chat", json={"pergunta": "   "})
         self.assertEqual(res.status_code, 400)
 
+    def test_crud_conversas_api(self):
+        # Cria conversa
+        res_create = self.client.post("/api/conversas", json={"titulo": "Teste API Conversa"})
+        self.assertEqual(res_create.status_code, 200)
+        cid = res_create.json()["id"]
+
+        # Lista e verifica presença
+        res_list = self.client.get("/api/conversas")
+        self.assertEqual(res_list.status_code, 200)
+        self.assertTrue(any(c["id"] == cid for c in res_list.json()))
+
+        # Obtém detalhes
+        res_get = self.client.get(f"/api/conversas/{cid}")
+        self.assertEqual(res_get.status_code, 200)
+        self.assertEqual(res_get.json()["titulo"], "Teste API Conversa")
+
+        # Exclui e confirma 404 depois
+        res_del = self.client.delete(f"/api/conversas/{cid}")
+        self.assertEqual(res_del.status_code, 200)
+        self.assertEqual(self.client.get(f"/api/conversas/{cid}").status_code, 404)
+
     def test_frontend_estatico_e_funcoes_exportacao(self):
         res_html = self.client.get("/")
         self.assertEqual(res_html.status_code, 200)
         self.assertIn("DataMind AI", res_html.text)
+        self.assertIn("chat-history-list", res_html.text)
 
         res_js = self.client.get("/js/app.js")
         self.assertEqual(res_js.status_code, 200)
-        for fn in ("exportarPDF", "exportarCSV", "exportarPNG"):
+        for fn in ("exportarPDF", "exportarCSV", "exportarPNG", "carregarListaConversas", "selecionarConversa"):
             self.assertIn(fn, res_js.text)
 
 

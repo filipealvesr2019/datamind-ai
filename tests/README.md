@@ -8,6 +8,7 @@ Esta pasta reúne os testes automatizados da plataforma **DataMind AI**, organiz
 | :--- | :--- | :--- |
 | `tests/api/` | Endpoints FastAPI (KPIs, dashboard, auditoria, PDF, chat e frontend) | [README.md](api/README.md) |
 | `tests/chart_builder/` | Construtor determinístico de gráficos Plotly (`bar`, `line`, `pie`, `donut` e `Top 5 + Outros`) | [README.md](chart_builder/README.md) |
+| `tests/chat_storage/` | Persistência de conversas e mensagens (com gráficos/tabelas) no SQLite | [README.md](chat_storage/README.md) |
 | `tests/intent_router/` | Roteador de intenções, formatação de histórico e fallback seguro | [README.md](intent_router/README.md) |
 | `tests/pdf_exporter/` | Geração de relatórios executivos em PDF com texto, tabela e gráfico | [README.md](pdf_exporter/README.md) |
 | `tests/sql_security/` | Camada de segurança SQL via AST (`sqlglot`), whitelisting e `LIMIT` | [README.md](sql_security/README.md) |

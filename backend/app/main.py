@@ -16,6 +16,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from db.database import get_read_only_connection
 from agent.engine import DataMindAgent
 from services.pdf_exporter import gerar_relatorio_pdf
+from services.chat_storage import (
+    init_chat_tables,
+    criar_conversa,
+    listar_conversas,
+    obter_conversa,
+    salvar_mensagem,
+    excluir_conversa,
+)
+
+# Garante tabelas de histórico do chat no SQLite
+init_chat_tables()
 
 app = FastAPI(
     title="DataMind AI — Analista Empresarial Inteligente",
@@ -47,6 +58,11 @@ class MensagemHistorico(BaseModel):
 class PerguntaRequest(BaseModel):
     pergunta: str
     historico: Optional[List[MensagemHistorico]] = None
+    conversa_id: Optional[int] = None
+
+
+class NovaConversaRequest(BaseModel):
+    titulo: Optional[str] = "Nova conversa"
 
 
 class ExportarPDFRequest(BaseModel):
@@ -149,13 +165,75 @@ def obter_top_produtos():
 
 @app.post("/api/chat")
 def conversar_com_dados(req: PerguntaRequest):
-    """Processa pergunta em linguagem natural, gera SQL validado e retorna resposta com gráfico."""
+    """Processa pergunta em linguagem natural, gera SQL validado, salva no histórico e retorna resposta."""
     if not req.pergunta.strip():
         raise HTTPException(status_code=400, detail="A pergunta não pode ser vazia.")
 
+    conversa_id = req.conversa_id
     historico_dicts = [m.model_dump() for m in req.historico] if req.historico else None
+
+    if conversa_id is not None:
+        conversa_existente = obter_conversa(conversa_id)
+        if not conversa_existente:
+            conversa_id = criar_conversa()["id"]
+        elif historico_dicts is None:
+            historico_dicts = [
+                {"role": m["role"], "content": m["conteudo"]}
+                for m in conversa_existente.get("mensagens", [])[-10:]
+            ]
+    else:
+        conversa_id = criar_conversa()["id"]
+
     resultado = agent.responder(req.pergunta, historico=historico_dicts)
+
+    if resultado.get("sucesso"):
+        salvar_mensagem(conversa_id=conversa_id, role="user", conteudo=req.pergunta.strip())
+        salvar_mensagem(
+            conversa_id=conversa_id,
+            role="assistant",
+            conteudo=resultado.get("resposta", ""),
+            intencao=resultado.get("intencao"),
+            grafico=resultado.get("grafico"),
+            dados_tabela=resultado.get("dados_tabela"),
+        )
+
+    resultado["conversa_id"] = conversa_id
     return resultado
+
+
+# ==========================================
+# ENDPOINTS DE HISTÓRICO DE CONVERSAS
+# ==========================================
+
+@app.get("/api/conversas")
+def api_listar_conversas(limite: int = 50):
+    """Lista todas as conversas salvas do Analista IA."""
+    return listar_conversas(limite=limite)
+
+
+@app.post("/api/conversas")
+def api_criar_conversa(req: Optional[NovaConversaRequest] = None):
+    """Cria uma nova conversa vazia."""
+    titulo = req.titulo if req and req.titulo else "Nova conversa"
+    return criar_conversa(titulo=titulo)
+
+
+@app.get("/api/conversas/{conversa_id}")
+def api_obter_conversa(conversa_id: int):
+    """Retorna uma conversa específica com todas as suas mensagens e gráficos."""
+    conversa = obter_conversa(conversa_id)
+    if not conversa:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+    return conversa
+
+
+@app.delete("/api/conversas/{conversa_id}")
+def api_excluir_conversa(conversa_id: int):
+    """Exclui uma conversa e todo o seu histórico de mensagens."""
+    excluida = excluir_conversa(conversa_id)
+    if not excluida:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+    return {"sucesso": True, "conversa_id": conversa_id}
 
 
 @app.post("/api/export/pdf")
