@@ -111,9 +111,9 @@ class DataMindAgent:
         ferramentas = self._criar_ferramentas(pergunta)
         ferramentas_map = {f.name: f for f in ferramentas}
 
-        # Modelos para tentar em cascata caso o primeiro atinja limite de cota (429)
+        # Modelos para tentar em cascata caso o primeiro falhe por cota (429) ou sobrecarga (503)
         modelos_candidatos = [self.model_name]
-        for fallback in ["gemini-2.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash-lite"]:
+        for fallback in ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"]:
             if fallback not in modelos_candidatos:
                 modelos_candidatos.append(fallback)
 
@@ -197,8 +197,9 @@ class DataMindAgent:
 
             except Exception as e:
                 ultimo_erro = e
-                # Se for erro de cota (429 / RESOURCE_EXHAUSTED), tenta o próximo modelo da lista
-                if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                erro_str = str(e)
+                # Em caso de cota (429), sobrecarga temporária (503/500) ou modelo indisponível (404), tenta o próximo modelo
+                if any(cod in erro_str for cod in ("429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE", "500", "404", "NOT_FOUND")):
                     continue
                 else:
                     break
