@@ -20,10 +20,12 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 
 try:
     from .prompt import SYSTEM_PROMPT
+    from .intent_router import classificar_intencao
     from ..security.sql_guard import executar_consulta_segura
     from ..services.chart_builder import construir_especificacao_grafico
 except (ImportError, ValueError):
     from agent.prompt import SYSTEM_PROMPT
+    from agent.intent_router import classificar_intencao
     from security.sql_guard import executar_consulta_segura
     from services.chart_builder import construir_especificacao_grafico
 
@@ -108,14 +110,58 @@ class DataMindAgent:
             }
 
         inicio = time.perf_counter()
-        ferramentas = self._criar_ferramentas(pergunta)
-        ferramentas_map = {f.name: f for f in ferramentas}
 
         # Modelos para tentar em cascata caso o primeiro falhe por cota (429) ou sobrecarga (503)
         modelos_candidatos = [self.model_name]
         for fallback in ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"]:
             if fallback not in modelos_candidatos:
                 modelos_candidatos.append(fallback)
+
+        # 1. Intent Router: classifica a intenção e valida se há ambiguidade antes de acionar SQL
+        decisao = classificar_intencao(
+            pergunta=pergunta,
+            historico=historico,
+            api_key=self.api_key,
+            modelos_candidatos=modelos_candidatos
+        )
+
+        if (decisao.intencao == "esclarecimento" or not decisao.esta_claro) and decisao.pergunta_esclarecimento:
+            duracao_ms = round((time.perf_counter() - inicio) * 1000, 2)
+            return {
+                "sucesso": True,
+                "intencao": "esclarecimento",
+                "resposta": decisao.pergunta_esclarecimento,
+                "sql_executado": None,
+                "dados_tabela": [],
+                "total_registros": 0,
+                "grafico": None,
+                "tempo_ms": duracao_ms,
+                "modelo_usado": self.model_name
+            }
+
+        if decisao.intencao == "conversa_geral" and decisao.resposta_direta:
+            duracao_ms = round((time.perf_counter() - inicio) * 1000, 2)
+            return {
+                "sucesso": True,
+                "intencao": "conversa_geral",
+                "resposta": decisao.resposta_direta,
+                "sql_executado": None,
+                "dados_tabela": [],
+                "total_registros": 0,
+                "grafico": None,
+                "tempo_ms": duracao_ms,
+                "modelo_usado": self.model_name
+            }
+
+        # 2. Execução do Agente SQL + Gráfico usando a intenção consolidada
+        ferramentas = self._criar_ferramentas(pergunta)
+        ferramentas_map = {f.name: f for f in ferramentas}
+
+        diretriz_router = f"\n\n### DIRETRIZ DO ROTEADOR DE INTENÇÕES:\n- Intenção: {decisao.intencao}\n- Solicitação consolidada: {decisao.intencao_consolidada}"
+        if decisao.tipo_grafico:
+            diretriz_router += f"\n- Gráfico obrigatório: tipo='{decisao.tipo_grafico}'"
+        if decisao.dimensao:
+            diretriz_router += f"\n- Dimensão de agrupamento: {decisao.dimensao}"
 
         ultimo_erro = None
         for modelo_atual in modelos_candidatos:
@@ -127,7 +173,7 @@ class DataMindAgent:
                     max_retries=1
                 ).bind_tools(ferramentas)
 
-                mensagens: List[Any] = [SystemMessage(content=SYSTEM_PROMPT)]
+                mensagens: List[Any] = [SystemMessage(content=SYSTEM_PROMPT + diretriz_router)]
                 if historico:
                     for msg in historico[-10:]:
                         role = msg.get("role", "")
@@ -186,6 +232,7 @@ class DataMindAgent:
 
                 return {
                     "sucesso": True,
+                    "intencao": decisao.intencao,
                     "resposta": texto_resposta,
                     "sql_executado": self.ultimo_sql,
                     "dados_tabela": self.ultimos_dados[:20],
